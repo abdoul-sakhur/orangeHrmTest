@@ -1,5 +1,6 @@
 #!/bin/bash
-
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 # Script pour lancer un fichier de test spécifique
 # Usage: ./run_test.sh <nom_du_fichier_test> [--headed]
 
