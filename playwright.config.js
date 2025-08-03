@@ -6,10 +6,12 @@ module.exports = defineConfig({
   expect: {
     timeout: 5000
   },
-   reporter: [
+ reporter: [
     ['html', { 
-      outputFolder: 'playwright-report',  // Assure-toi que c'est bien ce chemin
-      open: 'never'  // Ne pas ouvrir automatiquement
+      outputFolder: 'C:/ProgramData/Jenkins/.jenkins/workspace/recuperer_repository_github/playwright-report/',
+      open: 'never',
+      host: '0.0.0.0',
+      port: 9323
     }]
   ],
   use: {
