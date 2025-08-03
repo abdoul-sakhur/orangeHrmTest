@@ -285,5 +285,9 @@ else
     echo "ℹ️ Pas dans un environnement Jenkins - skip de la copie du rapport"
 fi
 
+# Ajoutez cette vérification après la copie :
+echo "=== VÉRIFICATION DES FICHIERS ==="
+find "$JENKINS_REPORT_DIR" -type f | head -20
+
 # IMPORTANT: Propager le code de sortie pour Jenkins
 exit $EXIT_CODE
