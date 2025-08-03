@@ -10,5 +10,8 @@ module.exports = defineConfig({
   use: {
     headless: true,
     browserName: 'chromium',
+        screenshot: 'only-on-failure',  // <--- capture auto en cas d'échec
+    // video: 'retain-on-failure',     // (optionnel) conserve vidéo en cas d'échec
+    // trace: 'on-first-retry'         // (optionnel) trace à la 2e tentative
   },
 });
