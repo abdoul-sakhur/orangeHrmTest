@@ -173,28 +173,26 @@ if [ -f "playwright.config.js" ] || [ -f "playwright.config.ts" ]; then
         echo ""
         echo "📊 === INFORMATIONS DU RAPPORT ==="
         
-        # Chercher le répertoire de rapports
-        REPORT_DIR=""
-        if [ -d "playwright-report" ]; then
-            REPORT_DIR="playwright-report"
-        elif [ -d "test-results" ]; then
-            REPORT_DIR="test-results"
-        fi
+        # Utiliser le chemin confirmé
+        REPORT_DIR="playwright-report"
         
-        if [ -n "$REPORT_DIR" ]; then
+        if [ -d "$REPORT_DIR" ]; then
             echo "📁 Répertoire du rapport: $(pwd)/$REPORT_DIR"
             
             # Chercher le fichier index.html
             if [ -f "$REPORT_DIR/index.html" ]; then
                 echo "🌐 Rapport HTML: file://$(pwd)/$REPORT_DIR/index.html"
                 echo "💡 Pour ouvrir le rapport: npx playwright show-report"
+                echo "📂 Chemin Windows: $(pwd | sed 's|/c/|C:\\|' | sed 's|/|\\|g')\\$REPORT_DIR\\index.html"
             fi
             
             # Lister les fichiers du rapport
-            echo "📄 Fichiers générés:"
+            echo "📄 Fichiers générés dans playwright-report:"
             find "$REPORT_DIR" -type f -name "*.html" -o -name "*.json" -o -name "*.xml" 2>/dev/null | head -10
         else
-            echo "⚠️  Aucun répertoire de rapport trouvé"
+            echo "⚠️  Répertoire playwright-report non trouvé"
+            echo "📋 Répertoires disponibles:"
+            find . -maxdepth 1 -type d -name "*report*" -o -name "*test*" 2>/dev/null
         fi
         
         # Afficher le résumé des tests
