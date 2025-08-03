@@ -8,7 +8,7 @@ module.exports = defineConfig({
   },
  reporter: [
     ['html', { 
-      outputFolder: 'C:/ProgramData/Jenkins/.jenkins/workspace/recuperer_repository_github/playwright-report/',
+      outputFolder: 'playwright-report',
       open: 'never',
       host: '0.0.0.0',
       port: 9323
