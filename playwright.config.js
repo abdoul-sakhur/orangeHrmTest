@@ -6,7 +6,12 @@ module.exports = defineConfig({
   expect: {
     timeout: 5000
   },
-  reporter: 'html',
+   reporter: [
+    ['html', { 
+      outputFolder: 'playwright-report',  // Assure-toi que c'est bien ce chemin
+      open: 'never'  // Ne pas ouvrir automatiquement
+    }]
+  ],
   use: {
     headless: true,
     browserName: 'chromium',
