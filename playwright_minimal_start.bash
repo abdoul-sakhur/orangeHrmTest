@@ -1,6 +1,7 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
 # Script pour lancer un fichier de test spécifique
 # Usage: ./run_test.sh <nom_du_fichier_test> [--headed]
 
@@ -133,6 +134,9 @@ fi
 
 echo "✅ Fichier trouvé: $TEST_FILE"
 
+# Variable pour stocker le code de sortie
+EXIT_CODE=0
+
 # Déterminer la commande à utiliser selon le type de projet
 if [ -f "playwright.config.js" ] || [ -f "playwright.config.ts" ]; then
     # Projet Playwright
@@ -143,13 +147,65 @@ if [ -f "playwright.config.js" ] || [ -f "playwright.config.ts" ]; then
     fi
     
     if command -v npx &> /dev/null; then
+        # Vérifier et installer les navigateurs si nécessaire
+        echo "🔍 Vérification des navigateurs Playwright..."
+        if ! npx playwright install --dry-run &>/dev/null; then
+            echo "📦 Installation des navigateurs Playwright..."
+            npx playwright install
+            if [ $? -ne 0 ]; then
+                echo "❌ Échec de l'installation des navigateurs Playwright"
+                exit 1
+            fi
+            echo "✅ Navigateurs Playwright installés avec succès"
+        fi
+        
         if [ "$HEADED_MODE" = true ]; then
             echo "Commande: npx playwright test \"$TEST_FILE\" --headed"
             npx playwright test "$TEST_FILE" --headed
+            EXIT_CODE=$?
         else
             echo "Commande: npx playwright test \"$TEST_FILE\""
             npx playwright test "$TEST_FILE"
+            EXIT_CODE=$?
         fi
+        
+        # Afficher les informations du rapport
+        echo ""
+        echo "📊 === INFORMATIONS DU RAPPORT ==="
+        
+        # Chercher le répertoire de rapports
+        REPORT_DIR=""
+        if [ -d "playwright-report" ]; then
+            REPORT_DIR="playwright-report"
+        elif [ -d "test-results" ]; then
+            REPORT_DIR="test-results"
+        fi
+        
+        if [ -n "$REPORT_DIR" ]; then
+            echo "📁 Répertoire du rapport: $(pwd)/$REPORT_DIR"
+            
+            # Chercher le fichier index.html
+            if [ -f "$REPORT_DIR/index.html" ]; then
+                echo "🌐 Rapport HTML: file://$(pwd)/$REPORT_DIR/index.html"
+                echo "💡 Pour ouvrir le rapport: npx playwright show-report"
+            fi
+            
+            # Lister les fichiers du rapport
+            echo "📄 Fichiers générés:"
+            find "$REPORT_DIR" -type f -name "*.html" -o -name "*.json" -o -name "*.xml" 2>/dev/null | head -10
+        else
+            echo "⚠️  Aucun répertoire de rapport trouvé"
+        fi
+        
+        # Afficher le résumé des tests
+        echo ""
+        if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ === TESTS RÉUSSIS ==="
+        else
+            echo "❌ === TESTS ÉCHOUÉS ==="
+            echo "💥 Code de sortie: $EXIT_CODE"
+        fi
+        
     else
         echo "❌ npx n'est pas installé. Veuillez installer Node.js et npm"
         exit 1
@@ -160,8 +216,10 @@ elif [ -f "package.json" ]; then
     echo "📦 Lancement du test Node.js..."
     if command -v npm &> /dev/null; then
         npm test "$TEST_FILE"
+        EXIT_CODE=$?
     elif command -v yarn &> /dev/null; then
         yarn test "$TEST_FILE"
+        EXIT_CODE=$?
     else
         echo "❌ npm ou yarn n'est pas installé"
         exit 1
@@ -173,6 +231,7 @@ else
     if [[ "$TEST_FILE" == *.js ]]; then
         if command -v node &> /dev/null; then
             node "$TEST_FILE"
+            EXIT_CODE=$?
         else
             echo "❌ Node.js n'est pas installé"
             exit 1
@@ -180,8 +239,10 @@ else
     elif [[ "$TEST_FILE" == *.ts ]]; then
         if command -v ts-node &> /dev/null; then
             ts-node "$TEST_FILE"
+            EXIT_CODE=$?
         elif command -v npx &> /dev/null; then
             npx ts-node "$TEST_FILE"
+            EXIT_CODE=$?
         else
             echo "❌ ts-node n'est pas installé. Installez-le avec: npm install -g ts-node"
             exit 1
@@ -192,4 +253,12 @@ else
     fi
 fi
 
-echo "✨ Test terminé!"
+echo ""
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✨ Test terminé avec succès!"
+else
+    echo "💥 Test terminé avec des erreurs (code: $EXIT_CODE)"
+fi
+
+# IMPORTANT: Propager le code de sortie pour Jenkins
+exit $EXIT_CODE
