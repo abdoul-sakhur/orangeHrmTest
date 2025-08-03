@@ -258,5 +258,32 @@ else
     echo "💥 Test terminé avec des erreurs (code: $EXIT_CODE)"
 fi
 
+# Copier le rapport dans le répertoire du job Jenkins si on est dans Jenkins
+if [ -n "$WORKSPACE" ]; then
+    echo "🔄 Copie du rapport vers le répertoire du job Jenkins..."
+    
+    # Chemin source du rapport
+    REPORT_SOURCE="$REPORT_DIR"
+    
+    # Chemin de destination dans Jenkins
+    JENKINS_REPORT_DIR="$WORKSPACE/playwright-report"
+    
+    # Vérifier si le rapport existe
+    if [ -d "$REPORT_SOURCE" ]; then
+        # Créer le répertoire de destination si nécessaire
+        mkdir -p "$JENKINS_REPORT_DIR"
+        
+        # Copier le contenu du rapport
+        cp -r "$REPORT_SOURCE"/* "$JENKINS_REPORT_DIR/"
+        
+        echo "✅ Rapport copié vers: $JENKINS_REPORT_DIR"
+        echo "🌐 Rapport accessible via: $JENKINS_REPORT_DIR/index.html"
+    else
+        echo "⚠️ Aucun rapport trouvé dans $REPORT_SOURCE"
+    fi
+else
+    echo "ℹ️ Pas dans un environnement Jenkins - skip de la copie du rapport"
+fi
+
 # IMPORTANT: Propager le code de sortie pour Jenkins
 exit $EXIT_CODE
