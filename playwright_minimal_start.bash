@@ -281,13 +281,31 @@ if [ -n "$WORKSPACE" ]; then
     else
         echo "⚠️ Aucun rapport trouvé dans $REPORT_SOURCE"
     fi
+    
+    # Ajoutez cette vérification après la copie :
+    echo "=== VÉRIFICATION DES FICHIERS ==="
+    find "$JENKINS_REPORT_DIR" -type f | head -20
+    
+    # Créer un fichier de métadonnées pour l'email
+    echo "📧 Création des métadonnées pour l'email..."
+    EMAIL_METADATA_FILE="$WORKSPACE/email_metadata.properties"
+    
+    # Créer le fichier de métadonnées
+    cat > "$EMAIL_METADATA_FILE" << EOF
+TEST_NAME=${TEST_INPUT}
+TEST_STATUS=$([ $EXIT_CODE -eq 0 ] && echo "SUCCESS" || echo "FAILED")
+EXIT_CODE=${EXIT_CODE}
+REPORT_PATH=${JENKINS_REPORT_DIR}/index.html
+BUILD_NUMBER=${BUILD_NUMBER:-"N/A"}
+BUILD_URL=${BUILD_URL:-"N/A"}
+WORKSPACE_PATH=${WORKSPACE}
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+EOF
+
+    echo "✅ Métadonnées créées: $EMAIL_METADATA_FILE"
 else
     echo "ℹ️ Pas dans un environnement Jenkins - skip de la copie du rapport"
 fi
-
-# Ajoutez cette vérification après la copie :
-echo "=== VÉRIFICATION DES FICHIERS ==="
-find "$JENKINS_REPORT_DIR" -type f | head -20
 
 # IMPORTANT: Propager le code de sortie pour Jenkins
 exit $EXIT_CODE
