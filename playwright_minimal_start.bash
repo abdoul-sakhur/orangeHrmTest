@@ -1,311 +1,70 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================
+# Usage:
+#   ./playwright_minimal_start.bash <test_file|nom_sans_ext> [--headed]
+# ==============================
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Script pour lancer un fichier de test spécifique
-# Usage: ./run_test.sh <nom_du_fichier_test> [--headed]
-
-# Vérifier si un paramètre a été fourni
-if [ $# -eq 0 ]; then
-    echo "❌ Erreur: Aucun nom de fichier fourni"
-    echo "Usage: $0 <nom_du_fichier_test> [--headed]"
-    echo "Exemple: $0 faire_une_connexion.spec.ts"
-    echo "Exemple: $0 faire_une_connexion --headed"
-    echo "Exemple: $0 faire_une_connexion.spec.ts --headed"
-    exit 1
+if [[ $# -lt 1 ]]; then
+  echo "❌ Aucun fichier de test fourni"
+  echo "Usage: $0 <test_file> [--headed]"
+  exit 1
 fi
 
-# Récupérer le nom du fichier et les options
-TEST_INPUT="$1"
-HEADED_MODE=false
-
-# Vérifier si --headed est dans les paramètres
+TEST_INPUT="$1"; shift || true
+HEADED=false
 for arg in "$@"; do
-    if [ "$arg" = "--headed" ]; then
-        HEADED_MODE=true
-        break
-    fi
+  [[ "$arg" == "--headed" ]] && HEADED=true
 done
 
-if [ "$HEADED_MODE" = true ]; then
-    echo "🔍 Recherche du fichier de test: $TEST_INPUT (mode --headed activé)"
-else
-    echo "🔍 Recherche du fichier de test: $TEST_INPUT"
-fi
-
-# Fonction pour chercher le fichier de test
+# --- Recherche simple ---
 find_test_file() {
-    local input="$1"
-    
-    # Si le fichier existe déjà tel quel (chemin complet donné)
-    if [ -f "$input" ]; then
-        echo "$input"
-        return 0
-    fi
-    
-    # Extraire juste le nom du fichier si un chemin a été donné
-    local base_name=$(basename "$input")
-    
-    # Enlever l'extension si elle est présente pour chercher avec différentes extensions
-    local name_without_ext="${base_name%.*}"
-    
-    # Définir les chemins possibles où chercher les fichiers de test
-    local search_paths=(
-        "tests"
-        "test-results" 
-        "."
-        "pages"
-        "specs"
-        "e2e"
-    )
-    
-    # Extensions possibles pour les fichiers de test
-    local extensions=(
-        ".spec.ts"
-        ".test.ts" 
-        ".spec.js"
-        ".test.js"
-    )
-    
-    # Chercher dans tous les chemins possibles
-    for path in "${search_paths[@]}"; do
-        if [ -d "$path" ]; then
-            # 1. Chercher le fichier exact avec le nom donné
-            if [ -f "$path/$base_name" ]; then
-                echo "$path/$base_name"
-                return 0
-            fi
-            
-            # 2. Si le nom n'a pas d'extension, essayer avec les extensions
-            if [[ "$base_name" != *.* ]]; then
-                for ext in "${extensions[@]}"; do
-                    if [ -f "$path/${base_name}${ext}" ]; then
-                        echo "$path/${base_name}${ext}"
-                        return 0
-                    fi
-                done
-            fi
-            
-            # 3. Chercher avec le nom sans extension + extensions
-            for ext in "${extensions[@]}"; do
-                if [ -f "$path/${name_without_ext}${ext}" ]; then
-                    echo "$path/${name_without_ext}${ext}"
-                    return 0
-                fi
-            done
-            
-            # 4. Chercher récursivement dans les sous-dossiers
-            local found_file=$(find "$path" -name "$base_name" -type f 2>/dev/null | head -1)
-            if [ -n "$found_file" ]; then
-                echo "$found_file"
-                return 0
-            fi
-            
-            # 5. Chercher récursivement avec les extensions
-            for ext in "${extensions[@]}"; do
-                found_file=$(find "$path" -name "${name_without_ext}${ext}" -type f 2>/dev/null | head -1)
-                if [ -n "$found_file" ]; then
-                    echo "$found_file"
-                    return 0
-                fi
-            done
-        fi
+  local input="$1"
+  [[ -f "$input" ]] && { echo "$input"; return; }
+
+  local base="$(basename "$input")"
+  local name="${base%.*}"
+  local -a search_dirs=( "tests" "specs" "e2e" "." )
+  local -a exts=( ".spec.ts" ".test.ts" ".spec.js" ".test.js" )
+
+  for d in "${search_dirs[@]}"; do
+    [[ -f "$d/$base" ]] && { echo "$d/$base"; return; }
+    for ext in "${exts[@]}"; do
+      [[ -f "$d/${name}${ext}" ]] && { echo "$d/${name}${ext}"; return; }
     done
-    
-    return 1
+  done
 }
 
-# Chercher le fichier de test
-TEST_FILE=$(find_test_file "$TEST_INPUT")
-
-if [ -z "$TEST_FILE" ]; then
-    echo "❌ Fichier de test non trouvé: $TEST_INPUT"
-    echo ""
-    echo "Fichiers de test disponibles:"
-    find . -name "*.spec.ts" -o -name "*.test.ts" -o -name "*.spec.js" -o -name "*.test.js" 2>/dev/null | sed 's|^\./||' | sort
-    echo ""
-    echo "💡 Essayez avec:"
-    echo "  - Juste le nom: $0 faire_une_connexion"
-    echo "  - Avec extension: $0 faire_une_connexion.spec.ts"
-    echo "  - Chemin complet: $0 tests/faire_une_connexion.spec.ts"
-    echo "  - Mode headed: $0 faire_une_connexion --headed"
-    exit 1
+TEST_FILE="$(find_test_file "$TEST_INPUT" || true)"
+if [[ -z "$TEST_FILE" ]]; then
+  echo "❌ Fichier introuvable: $TEST_INPUT"
+  echo "👉 Vérifiez dans tests/, specs/, e2e/"
+  exit 1
 fi
 
-echo "✅ Fichier trouvé: $TEST_FILE"
+echo "✅ Test trouvé: $TEST_FILE"
 
-# Variable pour stocker le code de sortie
-EXIT_CODE=0
+# --- Vérifier npx ---
+if ! command -v npx >/dev/null; then
+  echo "❌ npx non installé (Node.js/npm requis)"
+  exit 127
+fi
 
-# Déterminer la commande à utiliser selon le type de projet
-if [ -f "playwright.config.js" ] || [ -f "playwright.config.ts" ]; then
-    # Projet Playwright
-    if [ "$HEADED_MODE" = true ]; then
-        echo "🎭 Lancement du test Playwright en mode --headed..."
-    else
-        echo "🎭 Lancement du test Playwright..."
-    fi
-    
-    if command -v npx &> /dev/null; then
-        # Vérifier et installer les navigateurs si nécessaire
-        echo "🔍 Vérification des navigateurs Playwright..."
-        if ! npx playwright install --dry-run &>/dev/null; then
-            echo "📦 Installation des navigateurs Playwright..."
-            npx playwright install
-            if [ $? -ne 0 ]; then
-                echo "❌ Échec de l'installation des navigateurs Playwright"
-                exit 1
-            fi
-            echo "✅ Navigateurs Playwright installés avec succès"
-        fi
-        
-        if [ "$HEADED_MODE" = true ]; then
-            echo "Commande: npx playwright test \"$TEST_FILE\" --headed"
-            npx playwright test "$TEST_FILE" --headed
-            EXIT_CODE=$?
-        else
-            echo "Commande: npx playwright test \"$TEST_FILE\""
-            npx playwright test "$TEST_FILE"
-            EXIT_CODE=$?
-        fi
-        
-        # Afficher les informations du rapport
-        echo ""
-        echo "📊 === INFORMATIONS DU RAPPORT ==="
-        
-        # Utiliser le chemin confirmé
-        REPORT_DIR="playwright-report"
-        
-        if [ -d "$REPORT_DIR" ]; then
-            echo "📁 Répertoire du rapport: $(pwd)/$REPORT_DIR"
-            
-            # Chercher le fichier index.html
-            if [ -f "$REPORT_DIR/index.html" ]; then
-                echo "🌐 Rapport HTML: file://$(pwd)/$REPORT_DIR/index.html"
-                echo "💡 Pour ouvrir le rapport: npx playwright show-report"
-                echo "📂 Chemin Windows: $(pwd | sed 's|/c/|C:\\|' | sed 's|/|\\|g')\\$REPORT_DIR\\index.html"
-            fi
-            
-            # Lister les fichiers du rapport
-            echo "📄 Fichiers générés dans playwright-report:"
-            find "$REPORT_DIR" -type f -name "*.html" -o -name "*.json" -o -name "*.xml" 2>/dev/null | head -10
-        else
-            echo "⚠️  Répertoire playwright-report non trouvé"
-            echo "📋 Répertoires disponibles:"
-            find . -maxdepth 1 -type d -name "*report*" -o -name "*test*" 2>/dev/null
-        fi
-        
-        # Afficher le résumé des tests
-        echo ""
-        if [ $EXIT_CODE -eq 0 ]; then
-            echo "✅ === TESTS RÉUSSIS ==="
-        else
-            echo "❌ === TESTS ÉCHOUÉS ==="
-            echo "💥 Code de sortie: $EXIT_CODE"
-        fi
-        
-    else
-        echo "❌ npx n'est pas installé. Veuillez installer Node.js et npm"
-        exit 1
-    fi
-    
-elif [ -f "package.json" ]; then
-    # Projet Node.js générique
-    echo "📦 Lancement du test Node.js..."
-    if command -v npm &> /dev/null; then
-        npm test "$TEST_FILE"
-        EXIT_CODE=$?
-    elif command -v yarn &> /dev/null; then
-        yarn test "$TEST_FILE"
-        EXIT_CODE=$?
-    else
-        echo "❌ npm ou yarn n'est pas installé"
-        exit 1
-    fi
-    
+# --- Vérifier navigateurs Playwright ---
+if ! npx playwright --version >/dev/null 2>&1; then
+  echo "📦 Installation des navigateurs Playwright..."
+  npx playwright install
+fi
+
+# --- Exécution ---
+if $HEADED; then
+  echo "🎭 Lancement en mode --headed"
+  npx playwright test "$TEST_FILE" --headed
 else
-    # Essayer d'exécuter directement le fichier
-    echo "🚀 Exécution directe du fichier..."
-    if [[ "$TEST_FILE" == *.js ]]; then
-        if command -v node &> /dev/null; then
-            node "$TEST_FILE"
-            EXIT_CODE=$?
-        else
-            echo "❌ Node.js n'est pas installé"
-            exit 1
-        fi
-    elif [[ "$TEST_FILE" == *.ts ]]; then
-        if command -v ts-node &> /dev/null; then
-            ts-node "$TEST_FILE"
-            EXIT_CODE=$?
-        elif command -v npx &> /dev/null; then
-            npx ts-node "$TEST_FILE"
-            EXIT_CODE=$?
-        else
-            echo "❌ ts-node n'est pas installé. Installez-le avec: npm install -g ts-node"
-            exit 1
-        fi
-    else
-        echo "❌ Type de fichier non supporté: $TEST_FILE"
-        exit 1
-    fi
+  echo "🎭 Lancement en mode headless"
+  npx playwright test "$TEST_FILE"
 fi
-
-echo ""
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "✨ Test terminé avec succès!"
-else
-    echo "💥 Test terminé avec des erreurs (code: $EXIT_CODE)"
-fi
-
-# Copier le rapport dans le répertoire du job Jenkins si on est dans Jenkins
-if [ -n "$WORKSPACE" ]; then
-    echo "🔄 Copie du rapport vers le répertoire du job Jenkins..."
-    
-    # Chemin source du rapport
-    REPORT_SOURCE="$REPORT_DIR"
-    
-    # Chemin de destination dans Jenkins
-    JENKINS_REPORT_DIR="$WORKSPACE/playwright-report"
-    
-    # Vérifier si le rapport existe
-    if [ -d "$REPORT_SOURCE" ]; then
-        # Créer le répertoire de destination si nécessaire
-        mkdir -p "$JENKINS_REPORT_DIR"
-        
-        # Copier le contenu du rapport
-        cp -r "$REPORT_SOURCE"/* "$JENKINS_REPORT_DIR/"
-        
-        echo "✅ Rapport copié vers: $JENKINS_REPORT_DIR"
-        echo "🌐 Rapport accessible via: $JENKINS_REPORT_DIR/index.html"
-    else
-        echo "⚠️ Aucun rapport trouvé dans $REPORT_SOURCE"
-    fi
-    
-    # Ajoutez cette vérification après la copie :
-    echo "=== VÉRIFICATION DES FICHIERS ==="
-    find "$JENKINS_REPORT_DIR" -type f | head -20
-    
-    # Créer un fichier de métadonnées pour l'email
-    echo "📧 Création des métadonnées pour l'email..."
-    EMAIL_METADATA_FILE="$WORKSPACE/email_metadata.properties"
-    
-    # Créer le fichier de métadonnées
-    cat > "$EMAIL_METADATA_FILE" << EOF
-TEST_NAME=${TEST_INPUT}
-TEST_STATUS=$([ $EXIT_CODE -eq 0 ] && echo "SUCCESS" || echo "FAILED")
-EXIT_CODE=${EXIT_CODE}
-REPORT_PATH=${JENKINS_REPORT_DIR}/index.html
-BUILD_NUMBER=${BUILD_NUMBER:-"N/A"}
-BUILD_URL=${BUILD_URL:-"N/A"}
-WORKSPACE_PATH=${WORKSPACE}
-TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-EOF
-
-    echo "✅ Métadonnées créées: $EMAIL_METADATA_FILE"
-else
-    echo "ℹ️ Pas dans un environnement Jenkins - skip de la copie du rapport"
-fi
-
-# IMPORTANT: Propager le code de sortie pour Jenkins
-exit $EXIT_CODE
